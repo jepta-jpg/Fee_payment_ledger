@@ -1,39 +1,58 @@
-# 📑 Fee Ledger Web App
+# Fee Ledger Web App
 
-> **A sleek, modern, and high-performance fee management system.**
+Modern browser-based application for managing school fees / student ledgers.
 
----
+## Features
 
-## 🚀 Overview
-A simple, modern, and beautiful browser-based fee management system for schools, institutions, or personal use. Track student balances, record charges/payments, and export summaries—all through a clean, responsive web interface.
+- Add students (name, ID, class/grade)
+- Record charges & payments
+- Apply late fee (default 5%)
+- View transaction history with timestamps
+- Export ledger summary to text file
+- Persistent data (saved to `students.json` — survives server restarts)
+- Responsive web interface
+- Dark mode toggle (saved in browser)
+- Simple login screen (demo credentials: `admin` / `1234`)
+- Clean dashboard with quick actions
 
-### 🛠️ Built With
-* **Backend:** C++ (Logic) & `cpp-httplib` (Server)
-* **Frontend:** HTML5 & Tailwind CSS (UI)
-* **Icons:** Font Awesome
-* **Database:** Persistent JSON Storage (`students.json`)
+## Tech Stack
 
----
+- **Backend**: C++17
+- **Web server**: cpp-httplib (single header)
+- **Frontend**: HTML + Tailwind CSS (via CDN) + Font Awesome icons
+- **Chart**: Chart.js (via CDN)
+- **Persistence**: JSON file (`students.json`)
 
-## ✨ Key Features
+## Requirements
 
-* **User Dashboard:** High-level stats and quick action shortcuts.
-* **Transaction History:** Full logs with timestamps for every charge and payment.
-* **Late Fees:** Apply an automatic 5% penalty to outstanding balances.
-* **Dark Mode:** Seamless transition between light and dark UI (saved in-browser).
-* **Data Persistence:** Your data survives server restarts.
+- Windows
+- MinGW-w64 (with g++)
+- Internet connection (first run only — for CDNs)
 
----
+## Setup
 
-## 📥 Installation & Setup
+1. Place all files in one folder
 
-### 1. Requirements
-* **Windows** 10/11
-* **MinGW-w64** (g++ compiler)
+   Required files:
+   - `main.cpp`
+   - `ledger.h` + `ledger.cpp`
+   - `student.h` + `student.cpp`
+   - `transaction.h` + `transaction.cpp`
+   - `httplib.h` (download: https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.12.0/httplib.h)
 
-### 2. Compilation
-```bash
+2. Open Command Prompt in the folder
+
+   ```bash
+   cd path\to\FeeLedger
+./feeledger.exe
+
+## Compile
+
 g++ main.cpp ledger.cpp student.cpp transaction.cpp -o feeledger.exe -mconsole -std=c++17 -pthread -lws2_32
 
-Execution
-./feeledger.exe
+## Run
+
+feeledger.exe
+
+## Open in browser 
+http://localhost:8080
