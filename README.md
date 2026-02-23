@@ -1,3 +1,39 @@
-📑 Fee Ledger Web AppA sleek, modern, and high-performance fee management system.🚀 OverviewA simple, modern, and beautiful browser-based fee management system for schools, institutions, or personal use. Track student balances, record charges/payments, and export summaries—all through a clean, responsive web interface.🛠️ Built WithBackend: C++ (Logic) & cpp-httplib (Server)Frontend: HTML5 & Tailwind CSS (UI)Icons: Font AwesomeDatabase: Persistent JSON Storage (students.json)✨ Key FeaturesFeatureDescriptionUser DashboardHigh-level stats and quick action shortcuts.Transaction HistoryFull logs with timestamps for every charge and payment.Late FeesApply an automatic 5% penalty to outstanding balances.Dark ModeSeamless transition between light and dark UI (saved in-browser).Data PersistenceYour data survives server restarts thanks to JSON storage.ExportingGenerate text-based ledger summaries instantly.📸 ScreenshotsComing soon! Below are placeholders for your UI.Dashboard (Light)Student DetailDark Mode📥 Installation & Setup1. RequirementsWindows 10/11MinGW-w64 (g++ compiler)Internet Connection (Required for first run to load CDNs)2. CompilationOpen your terminal in the project folder and run the following command:Bashg++ main.cpp ledger.cpp student.cpp transaction.cpp -o feeledger.exe -mconsole -std=c++17 -pthread -lws2_32
-3. ExecutionStart the local server:Bash./feeledger.exe
-Visit http://localhost:8080 in your browser.
+# 📑 Fee Ledger Web App
+
+> **A sleek, modern, and high-performance fee management system.**
+
+---
+
+## 🚀 Overview
+A simple, modern, and beautiful browser-based fee management system for schools, institutions, or personal use. Track student balances, record charges/payments, and export summaries—all through a clean, responsive web interface.
+
+### 🛠️ Built With
+* **Backend:** C++ (Logic) & `cpp-httplib` (Server)
+* **Frontend:** HTML5 & Tailwind CSS (UI)
+* **Icons:** Font Awesome
+* **Database:** Persistent JSON Storage (`students.json`)
+
+---
+
+## ✨ Key Features
+
+* **User Dashboard:** High-level stats and quick action shortcuts.
+* **Transaction History:** Full logs with timestamps for every charge and payment.
+* **Late Fees:** Apply an automatic 5% penalty to outstanding balances.
+* **Dark Mode:** Seamless transition between light and dark UI (saved in-browser).
+* **Data Persistence:** Your data survives server restarts.
+
+---
+
+## 📥 Installation & Setup
+
+### 1. Requirements
+* **Windows** 10/11
+* **MinGW-w64** (g++ compiler)
+
+### 2. Compilation
+```bash
+g++ main.cpp ledger.cpp student.cpp transaction.cpp -o feeledger.exe -mconsole -std=c++17 -pthread -lws2_32
+
+Execution
+./feeledger.exe
