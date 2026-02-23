@@ -1,0 +1,9 @@
+Fee Ledger Summary
+Total charges: KES 31197717.45
+Total payments: KES 773265.00
+Current balance: KES 30424452.45
+
+Transaction History:
+[2026-02-23 17:44:54] Charge: TUITION - KES 29748934.00
+[2026-02-23 17:45:03] Payment: Payment - KES 773265.00
+[2026-02-23 17:45:07] Charge: Late fee (5.000000%) - KES 1448783.45

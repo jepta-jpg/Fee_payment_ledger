@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Joshua Nigel Masinde",
+    "id": "14190",
+    "className": "4B",
+    "ledger": {
+      "totalCharged": 0,
+      "totalPaid": 0,
+      "balance": 0,
+      "history": [
+      ]
+    }
+  },
+  {
+    "name": "JEPTER CHERUIYOT",
+    "id": "14334",
+    "className": "4B",
+    "ledger": {
+      "totalCharged": 0,
+      "totalPaid": 0,
+      "balance": 0,
+      "history": [
+      ]
+    }
+  },
+  {
+    "name": "Zenner Anyango",
+    "id": "15690",
+    "className": "4B",
+    "ledger": {
+      "totalCharged": 0,
+      "totalPaid": 0,
+      "balance": 0,
+      "history": [
+      ]
+    }
+  }
+]

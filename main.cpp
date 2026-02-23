@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <ctime>
 #include <sstream>
+#include <fstream>
 #include "ledger.h"
 #include "student.h"
 #include "transaction.h"
@@ -14,113 +15,265 @@ using namespace std;
 
 vector<Student> students;
 int currentStudentIndex = -1;
+string loggedInUser = "";
 
+// Load data from students.json on startup
+void loadData() {
+    ifstream file("students.json");
+    if (!file.is_open()) {
+        cout << "No saved data found" << endl;
+        return;
+    }
+
+    string content((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+    file.close();
+
+    size_t pos = 0;
+    students.clear();
+    while ((pos = content.find("{\"name\":\"", pos)) != string::npos) {
+        pos += 9;
+        size_t end = content.find("\"", pos);
+        string name = content.substr(pos, end - pos);
+        pos = end + 1;
+
+        pos = content.find("\"id\":\"", pos) + 6;
+        end = content.find("\"", pos);
+        string id = content.substr(pos, end - pos);
+        pos = end + 1;
+
+        pos = content.find("\"className\":\"", pos) + 13;
+        end = content.find("\"", pos);
+        string className = content.substr(pos, end - pos);
+        pos = end + 1;
+
+        students.emplace_back(name, id, className);
+        auto& ledger = students.back().getLedgerMutable();
+
+        pos = content.find("\"totalCharged\":", pos) + 16;
+        end = content.find(",", pos);
+        ledger.setTotalCharged(stod(content.substr(pos, end - pos)));
+        pos = end + 1;
+
+        pos = content.find("\"totalPaid\":", pos) + 12;
+        end = content.find(",", pos);
+        ledger.setTotalPaid(stod(content.substr(pos, end - pos)));
+        pos = end + 1;
+
+        pos = content.find("\"balance\":", pos) + 10;
+        end = content.find(",", pos);
+        ledger.setBalance(stod(content.substr(pos, end - pos)));
+        pos = end + 1;
+
+        pos = content.find("\"history\": [", pos) + 12;
+        vector<Transaction> hist;
+        while (pos < content.find("]", pos)) {
+            pos = content.find("{\"description\":\"", pos) + 16;
+            end = content.find("\"", pos);
+            string desc = content.substr(pos, end - pos);
+            pos = end + 1;
+
+            pos = content.find("\"amount\":", pos) + 9;
+            end = content.find(",", pos);
+            double amt = stod(content.substr(pos, end - pos));
+            pos = end + 1;
+
+            pos = content.find("\"type\":\"", pos) + 8;
+            end = content.find("\"", pos);
+            string type = content.substr(pos, end - pos);
+            pos = end + 1;
+
+            pos = content.find("\"timestamp\":\"", pos) + 13;
+            end = content.find("\"", pos);
+            string timestamp = content.substr(pos, end - pos);
+            pos = end + 1;
+
+            Transaction tx(desc, amt, type);
+            tx.timestamp = timestamp;
+            hist.push_back(tx);
+        }
+        ledger.clearAndAddHistory(hist);
+        pos = content.find("}", pos);
+    }
+    if (!students.empty()) currentStudentIndex = 0;
+    cout << "Loaded " << students.size() << " students from students.json" << endl;
+}
+
+// Save data to students.json
+void saveData() {
+    ofstream file("students.json");
+    if (!file.is_open()) {
+        cout << "Error saving students.json" << endl;
+        return;
+    }
+
+    file << "[\n";
+    for (size_t i = 0; i < students.size(); ++i) {
+        const auto& s = students[i];
+        file << "  {\n";
+        file << "    \"name\": \"" << s.getName() << "\",\n";
+        file << "    \"id\": \"" << s.getId() << "\",\n";
+        file << "    \"className\": \"" << s.getClassName() << "\",\n";
+        file << "    \"ledger\": {\n";
+        file << "      \"totalCharged\": " << s.getLedger().getTotalCharged() << ",\n";
+        file << "      \"totalPaid\": " << s.getLedger().getTotalPaid() << ",\n";
+        file << "      \"balance\": " << s.getLedger().getBalance() << ",\n";
+        file << "      \"history\": [\n";
+        const auto& hist = s.getLedger().getHistoryList();
+        for (size_t j = 0; j < hist.size(); ++j) {
+            const auto& tx = hist[j];
+            file << "        {\"description\": \"" << tx.description << "\", \"amount\": " << tx.amount 
+                 << ", \"type\": \"" << tx.type << "\", \"timestamp\": \"" << tx.timestamp << "\"}";
+            if (j < hist.size() - 1) file << ",";
+            file << "\n";
+        }
+        file << "      ]\n";
+        file << "    }\n";
+        file << "  }";
+        if (i < students.size() - 1) file << ",";
+        file << "\n";
+    }
+    file << "]";
+    file.close();
+    cout << "Saved " << students.size() << " students to students.json" << endl;
+}
+
+// Beautiful HTML/CSS (Apple-style, dark mode, interactive)
 string header = R"(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth" data-theme="light">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fee Ledger</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fee Ledger</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #e0eafc, #cfdef3);
+      --text: #1d1d1f;
+      --card-bg: rgba(255, 255, 255, 0.8);
+      --card-border: rgba(0, 0, 0, 0.08);
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --shadow: 0 10px 40px rgba(0,0,0,0.08);
+      --accent: #8b5cf6;
+    }
+    [data-theme="dark"] {
+      --bg: linear-gradient(135deg, #0f0f11, #1c1c1e);
+      --text: #f5f5f7;
+      --card-bg: rgba(28, 28, 30, 0.8);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.5s ease, color 0.5s ease;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+    h1 { font-size: 3.75rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow);
+      padding: 32px;
+      margin-bottom: 32px;
+      transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+    .card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 32px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 1.125rem;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-2px); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 2rem; }
+    .student-card { text-align: center; transition: all 0.4s ease; }
+    .student-card:hover { transform: scale(1.04); }
+    .balance-positive { color: #ef4444; font-weight: 700; font-size: 2.5rem; }
+    .balance-negative { color: #10b981; font-weight: 700; font-size: 2.5rem; }
+    .balance-zero { color: #10b981; font-weight: 700; font-size: 2.5rem; }
+    .theme-toggle {
+      cursor: pointer;
+      padding: 12px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.06);
+      transition: all 0.3s;
+    }
+    .dark .theme-toggle { background: rgba(255,255,255,0.1); }
+  </style>
 </head>
-<body class="bg-gradient-to-br from-indigo-50 via-white to-blue-50 min-h-screen">
-<div class="container mx-auto px-4 py-8">
+<body>
+  <div class="container py-16">
+    <div class="flex justify-between items-center mb-16">
+      <h1 class="text-6xl font-bold text-primary">Fee Ledger</h1>
+      <button id="themeToggle" class="theme-toggle text-2xl">
+        <i class="fas fa-moon dark:hidden"></i>
+        <i class="fas fa-sun hidden dark:inline"></i>
+      </button>
+    </div>
 )";
 
-string footer = "</div></body></html>";
+string footer = R"(
+  </div>
 
+  <script>
+    const toggle = document.getElementById('themeToggle');
+    toggle?.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    });
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+</body>
+</html>
+)";
+
+// Routes
 void setupRoutes() {
     Server svr;
 
     svr.Get("/", [](const Request&, Response &res) {
-        string body = header + R"(
-<header class="text-center mb-12">
-  <h1 class="text-5xl font-bold text-indigo-700 mb-4">Fee Ledger</h1>
-  <p class="text-xl text-gray-600">Manage student fees easily</p>
-</header>
-
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-)";
-
+        string body = header + "<h1>Fee Ledger - Students</h1><ul>";
         if (students.empty()) {
-            body += R"(
-<div class="col-span-full text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-100">
-  <i class="fas fa-users text-6xl text-indigo-300 mb-6"></i>
-  <h2 class="text-2xl font-semibold text-gray-700 mb-4">No students yet</h2>
-  <a href="/add-student" class="inline-block bg-indigo-600 text-white px-8 py-4 rounded-xl font-medium hover:bg-indigo-700 transition">
-    Add First Student
-  </a>
-</div>
-)";
+            body += "<li>No students yet. <a href=\"/add-student\">Add one</a></li>";
         } else {
             for (size_t i = 0; i < students.size(); ++i) {
-                const auto& s = students[i];
-                double bal = s.getLedger().getBalance();
-                string balClass = bal > 0 ? "text-red-600" : (bal < 0 ? "text-green-600" : "text-gray-600");
-                string balText = bal > 0 ? "Owed" : (bal < 0 ? "Overpaid" : "Cleared");
-
-                body += R"(
-<div class="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100">
-  <div class="p-6">
-    <h3 class="text-xl font-bold text-indigo-700 mb-2">)" + s.getName() + R"(</h3>
-    <p class="text-gray-600 mb-4">ID: )" + s.getId() + R"( • Class: )" + s.getClassName() + R"(</p>
-    <p class="text-lg font-semibold )" + balClass + R"( mb-1">KES )" + to_string(bal) + R"(</p>
-    <p class="text-sm text-gray-500 mt-1">)" + balText + R"(</p>
-  </div>
-  <div class="bg-gray-50 px-6 py-4 border-t border-gray-100">
-    <a href="/student/)" + to_string(i) + R"(" class="text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
-      View Ledger <i class="fas fa-arrow-right ml-2"></i>
-    </a>
-  </div>
-</div>
-)";
+                body += "<li><a href=\"/student/" + to_string(i) + "\">" 
+                        + students[i].getName() + " (" + students[i].getId() + ")</a></li>";
             }
         }
-
-        body += R"(
-</div>
-
-<div class="text-center mt-12">
-  <a href="/add-student" class="inline-block bg-indigo-600 text-white px-10 py-5 rounded-full font-semibold text-lg hover:bg-indigo-700 transition shadow-lg">
-    Add New Student
-  </a>
-</div>
-)" + footer;
-
+        body += "</ul><br><a href=\"/add-student\">Add New Student</a>";
+        body += footer;
         res.set_content(body, "text/html");
     });
 
-    // Add-student form
     svr.Get("/add-student", [](const Request&, Response &res) {
-        string body = header + R"(
-<div class="max-w-lg mx-auto mt-12">
-  <div class="bg-white rounded-2xl shadow-xl p-8">
-    <h1 class="text-3xl font-bold text-indigo-700 mb-8 text-center">Add New Student</h1>
-    <form method="POST" action="/add-student" class="space-y-6">
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Full Name</label>
-        <input type="text" name="name" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Student ID</label>
-        <input type="text" name="id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Class/Grade</label>
-        <input type="text" name="className" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold hover:bg-indigo-700 transition">
-        Add Student
-      </button>
-    </form>
-  </div>
-  <div class="text-center mt-8">
-    <a href="/" class="text-indigo-600 hover:text-indigo-800 font-medium">Back to Dashboard</a>
-  </div>
-</div>
-)" + footer;
+        string body = header + "<h1>Add New Student</h1>"
+            "<form method=\"POST\" action=\"/add-student\">"
+            "Name: <input type=\"text\" name=\"name\" required><br><br>"
+            "ID: <input type=\"text\" name=\"id\" required><br><br>"
+            "Class/Grade: <input type=\"text\" name=\"className\" required><br><br>"
+            "<input type=\"submit\" value=\"Add Student\">"
+            "</form><br><a href=\"/\">Back</a>" + footer;
         res.set_content(body, "text/html");
     });
 
@@ -132,10 +285,11 @@ void setupRoutes() {
         students.emplace_back(name, id, className);
         currentStudentIndex = students.size() - 1;
 
+        saveData();
+
         res.set_redirect("/");
     });
 
-    // Student detail page
     svr.Get(R"(/student/(\d+))", [](const Request& req, Response &res) {
         int idx = stoi(req.matches[1]);
         if (idx < 0 || idx >= students.size()) {
@@ -144,117 +298,28 @@ void setupRoutes() {
         }
         currentStudentIndex = idx;
         const auto& stu = students[idx];
-        double bal = stu.getLedger().getBalance();
-        string balClass = bal > 0 ? "text-red-600" : (bal < 0 ? "text-green-600" : "text-gray-800");
 
-        string body = header + R"(
-<div class="container mx-auto px-4 py-12">
-  <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-4xl font-bold text-indigo-700">)" + stu.getName() + R"(</h1>
-      <span class="px-6 py-3 rounded-full text-lg font-semibold )" + (bal > 0 ? "bg-red-100 text-red-800" : (bal < 0 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800")) + R"(">
-        Balance: KES )" + to_string(bal) + R"(
-      </span>
-    </div>
-    <p class="text-gray-600 mb-2">ID: )" + stu.getId() + R"(</p>
-    <p class="text-gray-600 mb-8">Class: )" + stu.getClassName() + R"(</p>
+        string body = header + "<h1>" + stu.getName() + " (" + stu.getId() + " - " + stu.getClassName() + ")</h1>";
+        body += "<p>" + stu.getLedger().getSummary() + "</p>";
+        body += "<h2>Transaction History</h2>" + stu.getLedger().getHistory();
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-2xl font-bold mb-6">Summary</h2>
-        <div class="prose max-w-none">
-          )" + stu.getLedger().getSummary() + R"(
-        </div>
-      </div>
+        body += "<br><a href=\"/add-charge\">Add Charge</a> | ";
+        body += "<a href=\"/add-payment\">Add Payment</a> | ";
+        body += "<a href=\"/apply-late-fee\">Apply Late Fee</a> | ";
+        body += "<a href=\"/export\">Export Summary</a> | ";
+        body += "<a href=\"/\">Back to Students</a>";
 
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-2xl font-bold mb-6">Balance Over Time</h2>
-        <canvas id="balanceChart" height="200"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-    <h2 class="text-2xl font-bold mb-6">Transaction History</h2>
-    )" + stu.getLedger().getHistory() + R"(
-  </div>
-
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-    <a href="/add-charge" class="btn bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl text-center font-medium transition">
-      <i class="fas fa-plus mr-2"></i> Add Charge
-    </a>
-    <a href="/add-payment" class="btn bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl text-center font-medium transition">
-      <i class="fas fa-money-bill-wave mr-2"></i> Record Payment
-    </a>
-    <a href="/apply-late-fee" class="btn bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-xl text-center font-medium transition">
-      <i class="fas fa-exclamation-triangle mr-2"></i> Apply Late Fee
-    </a>
-    <a href="/export" class="btn bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-center font-medium transition">
-      <i class="fas fa-file-export mr-2"></i> Export
-    </a>
-  </div>
-
-  <div class="text-center mt-10">
-    <a href="/" class="text-indigo-600 hover:text-indigo-800 font-medium">
-      <i class="fas fa-arrow-left mr-2"></i> Back to Dashboard
-    </a>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const ctx = document.getElementById('balanceChart')?.getContext('2d');
-  if (ctx) {
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-        datasets: [{
-          label: 'Balance',
-          data: [12000, 8000, 15000, 5000, -2000, 3000],
-          borderColor: '#4361ee',
-          backgroundColor: 'rgba(67, 97, 238, 0.2)',
-          tension: 0.4,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: { y: { beginAtZero: false } }
-      }
-    });
-  }
-</script>
-)" + footer;
-
+        body += footer;
         res.set_content(body, "text/html");
     });
 
-    // Add charge route
     svr.Get("/add-charge", [](const Request&, Response &res) {
-        string body = header + R"(
-<div class="container mx-auto px-4 py-12 max-w-lg">
-  <div class="bg-white rounded-2xl shadow-xl p-8">
-    <h1 class="text-3xl font-bold text-indigo-700 mb-8 text-center">Add Charge</h1>
-    <form method="POST" action="/add-charge" class="space-y-6">
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Description</label>
-        <input type="text" name="desc" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Amount (KES)</label>
-        <input type="number" step="0.01" name="amount" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold hover:bg-indigo-700 transition">
-        Add Charge
-      </button>
-    </form>
-  </div>
-  <div class="text-center mt-8">
-    <a href="/student/" + to_string(currentStudentIndex) + R"(" class="text-indigo-600 hover:text-indigo-800 font-medium">Back to Ledger</a>
-  </div>
-</div>
-)" + footer;
+        string body = header + "<h1>Add Charge</h1>"
+            "<form method=\"POST\" action=\"/add-charge\">"
+            "Description: <input type=\"text\" name=\"desc\" required><br><br>"
+            "Amount (KES): <input type=\"number\" step=\"0.01\" name=\"amount\" required><br><br>"
+            "<input type=\"submit\" value=\"Add Charge\">"
+            "</form><br><a href=\"/student/" + to_string(currentStudentIndex) + "\">Back</a>" + footer;
         res.set_content(body, "text/html");
     });
 
@@ -262,41 +327,29 @@ void setupRoutes() {
         double amount = stod(req.get_param_value("amount"));
         string desc = req.get_param_value("desc");
         students[currentStudentIndex].getLedgerMutable().addCharge(desc, amount);
+        saveData();
         res.set_redirect("/student/" + to_string(currentStudentIndex));
     });
 
-    // Add payment route
     svr.Get("/add-payment", [](const Request&, Response &res) {
-        string body = header + R"(
-<div class="container mx-auto px-4 py-12 max-w-lg">
-  <div class="bg-white rounded-2xl shadow-xl p-8">
-    <h1 class="text-3xl font-bold text-indigo-700 mb-8 text-center">Record Payment</h1>
-    <form method="POST" action="/add-payment" class="space-y-6">
-      <div>
-        <label class="block text-gray-700 font-medium mb-2">Amount (KES)</label>
-        <input type="number" step="0.01" name="amount" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <button type="submit" class="w-full bg-green-600 text-white py-4 rounded-xl font-semibold hover:bg-green-700 transition">
-        Record Payment
-      </button>
-    </form>
-  </div>
-  <div class="text-center mt-8">
-    <a href="/student/" + to_string(currentStudentIndex) + R"(" class="text-indigo-600 hover:text-indigo-800 font-medium">Back to Ledger</a>
-  </div>
-</div>
-)" + footer;
+        string body = header + "<h1>Record Payment</h1>"
+            "<form method=\"POST\" action=\"/add-payment\">"
+            "Amount (KES): <input type=\"number\" step=\"0.01\" name=\"amount\" required><br><br>"
+            "<input type=\"submit\" value=\"Record Payment\">"
+            "</form><br><a href=\"/student/" + to_string(currentStudentIndex) + "\">Back</a>" + footer;
         res.set_content(body, "text/html");
     });
 
     svr.Post("/add-payment", [](const Request& req, Response &res) {
         double amount = stod(req.get_param_value("amount"));
         students[currentStudentIndex].getLedgerMutable().addPayment(amount);
+        saveData();
         res.set_redirect("/student/" + to_string(currentStudentIndex));
     });
 
     svr.Get("/apply-late-fee", [](const Request&, Response &res) {
         students[currentStudentIndex].getLedgerMutable().applyLateFee();
+        saveData();
         res.set_redirect("/student/" + to_string(currentStudentIndex));
     });
 
@@ -311,6 +364,7 @@ void setupRoutes() {
 }
 
 int main() {
+    loadData();
     setupRoutes();
     return 0;
 }

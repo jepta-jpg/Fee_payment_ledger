@@ -29,10 +29,16 @@ public:
     std::string getSummary() const;
     std::string getHistory() const;
 
-    // New getters for save/load
-    double getTotalCharged() const { return totalCharged; }
-    double getTotalPaid() const { return totalPaid; }
-    const std::vector<Transaction>& getHistoryList() const { return history; }
+    // Getters for save/load
+    double getTotalCharged() const;
+    double getTotalPaid() const;
+    const std::vector<Transaction>& getHistoryList() const;
+
+    // Setters for loading
+    void setTotalCharged(double val);
+    void setTotalPaid(double val);
+    void setBalance(double val);
+    void clearAndAddHistory(const std::vector<Transaction>& newHistory);
 };
 
 #endif // LEDGER_H
