@@ -44,7 +44,7 @@ Modern browser-based application for managing school fees / student ledgers.
 
    ```bash
    cd path\to\FeeLedger
-./feeledger.exe
+
 
 ## Compile
 
