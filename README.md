@@ -12,7 +12,6 @@ Modern browser-based application for managing school fees / student ledgers.
 - Persistent data (saved to `students.json` — survives server restarts)
 - Responsive web interface
 - Dark mode toggle (saved in browser)
-- Simple login screen (demo credentials: `admin` / `1234`)
 - Clean dashboard with quick actions
 
 ## Tech Stack
